@@ -1,13 +1,13 @@
 """
 Data preprocessing script for mental health sentiment analysis.
-This script handles loading, cleaning, and tokenizing dataset for Llama 4 fine-tuning.
+This script handles loading, cleaning, and tokenizing dataset for BERT fine-tuning.
 """
 
 import os
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from transformers import LlamaTokenizer
+from transformers import BertTokenizer
 import json
 import logging
 from tqdm import tqdm
@@ -25,14 +25,15 @@ EMOTIONS = ["stress", "anxiety", "sadness", "happiness", "neutrality",
             "frustration", "fear", "excitement", "calm", "overwhelmed"]
 RANDOM_SEED = 42
 OUTPUT_DIR = "data/processed"
-TOKENIZER_MODEL = "meta-llama/Llama-2-7b-hf"  # Will be replaced with Llama 4 when available
+TOKENIZER_MODEL = "bert-base-uncased"  # Using BERT tokenizer
 
 class DataProcessor:
-    def __init__(self, tokenizer_name=TOKENIZER_MODEL, max_length=512):
+    def __init__(self, tokenizer_name=TOKENIZER_MODEL, max_length=128):
         """Initialize DataProcessor with tokenizer and parameters."""
         logger.info(f"Initializing tokenizer: {tokenizer_name}")
-        self.tokenizer = LlamaTokenizer.from_pretrained(tokenizer_name)
+        self.tokenizer = BertTokenizer.from_pretrained(tokenizer_name)
         self.max_length = max_length
+        self.emotion_labels = EMOTIONS
         
         # Ensure output directory exists
         os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -81,15 +82,16 @@ class DataProcessor:
         df['cleaned_text'] = df['text'].apply(self.clean_text)
         
         # Filter for relevant emotions if needed
-        if 'emotion' in df.columns and not df['emotion'].isin(EMOTIONS).all():
-            logger.info(f"Remapping emotions to {EMOTIONS}")
-            # Implement emotion mapping logic here
-            # This will depend on your specific dataset
+        if 'emotion' in df.columns and not df['emotion'].isin(self.emotion_labels).all():
+            logger.info(f"Remapping emotions to {self.emotion_labels}")
+            # Implement emotion mapping logic here if needed
+            # For simplicity in this example, we'll just filter to included emotions
+            df = df[df['emotion'].isin(self.emotion_labels)]
         
         return df
     
     def tokenize_dataset(self, df):
-        """Tokenize text using Llama tokenizer."""
+        """Tokenize text using BERT tokenizer."""
         logger.info("Tokenizing dataset")
         
         tokenized_data = []
@@ -108,7 +110,7 @@ class DataProcessor:
             )
             
             # Prepare output as emotion label
-            label = EMOTIONS.index(row['emotion']) if row['emotion'] in EMOTIONS else -1
+            label = self.emotion_labels.index(row['emotion']) if row['emotion'] in self.emotion_labels else -1
             
             if label == -1:
                 continue  # Skip rows with unmapped emotions
@@ -116,6 +118,7 @@ class DataProcessor:
             tokenized_data.append({
                 "input_ids": tokenized_input["input_ids"].squeeze().tolist(),
                 "attention_mask": tokenized_input["attention_mask"].squeeze().tolist(),
+                "token_type_ids": tokenized_input["token_type_ids"].squeeze().tolist(),  # BERT uses token_type_ids
                 "label": label
             })
         
@@ -154,7 +157,7 @@ class DataProcessor:
         
         # Also save emotion mapping
         with open(os.path.join(OUTPUT_DIR, "emotion_mapping.json"), "w") as f:
-            json.dump({i: emotion for i, emotion in enumerate(EMOTIONS)}, f)
+            json.dump({str(i): emotion for i, emotion in enumerate(self.emotion_labels)}, f)
     
     def process_dataset(self, file_path):
         """Full pipeline to process dataset."""
@@ -167,10 +170,10 @@ class DataProcessor:
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description="Process dataset for Llama fine-tuning")
+    parser = argparse.ArgumentParser(description="Process dataset for BERT fine-tuning")
     parser.add_argument("--input", required=True, help="Path to input dataset file (CSV or JSON)")
     parser.add_argument("--tokenizer", default=TOKENIZER_MODEL, help="Tokenizer model name")
-    parser.add_argument("--max-length", type=int, default=512, help="Maximum sequence length")
+    parser.add_argument("--max-length", type=int, default=128, help="Maximum sequence length")
     
     args = parser.parse_args()
     
