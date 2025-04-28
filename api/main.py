@@ -59,12 +59,18 @@ async def generic_exception_handler(request: Request, exc: Exception):
         content={"detail": "Internal server error"},
     )
 
+from api.speech_processing import get_speech_processor
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize models at startup."""
     global sentiment_predictor
+    # Initialize sentiment model
     sentiment_predictor = SentimentPredictor(model_dir=settings.MODEL_DIR)
     logger.info("Sentiment analysis model loaded successfully")
+    # Initialize speech processor
+    get_speech_processor(model_size="base")
+    logger.info("Speech processor initialized")
 
 def get_predictor():
     """Dependency to get the sentiment predictor."""
