@@ -1,0 +1,21 @@
+# Ignore Python cache and bytecode
+__pycache__/
+*.py[cod]
+
+# Ignore virtual environments
+.venv/
+env/
+
+# Ignore logs and runtime files
+*.log
+uvicorn.log
+
+# MacOS files
+.DS_Store
+
+# Streamlit generated files
+*.streamlit
+
+# Editor directories
+.vscode/
+.idea/
