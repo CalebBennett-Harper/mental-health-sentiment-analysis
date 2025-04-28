@@ -1,9 +1,108 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from api.models import TextRequest, BatchTextRequest, SpeechRequest, SentimentResponse, BatchSentimentResponse
+from fastapi.responses import JSONResponse
+from typing import List
+import time
+import logging
+from models.inference import SentimentPredictor
+import asyncio
+from api.main import get_predictor
+
+# Add logger
+logger = logging.getLogger("api.routes")
 
 router = APIRouter()
 
-# Placeholder for future endpoints (text, batch, speech analysis)
-# Example:
-# @router.post("/analyze/text")
-# async def analyze_text(...):
-#     pass
+@router.post("/analyze/text", response_model=SentimentResponse, tags=["Analysis"])
+async def analyze_text(request: TextRequest, predictor=Depends(get_predictor)):
+    """
+    Analyze sentiment of a single text input.
+    Returns emotional analysis with confidence scores.
+    """
+    if predictor is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    try:
+        start = time.time()
+        # Check if explanation is available
+        if hasattr(predictor, "analyze_text_with_explanation"):
+            result = predictor.analyze_text_with_explanation(request.text)
+        else:
+            result = predictor.predict(request.text)
+        elapsed = time.time() - start
+        logger.info(f"Analyzed text with length {len(request.text)} in {elapsed:.3f}s")
+        return SentimentResponse(
+            emotion=result["emotion"],
+            confidence=result["confidence"],
+            scores=result["scores"],
+            processing_time=elapsed,
+            explanation=result.get("explanation")
+        )
+    except Exception as e:
+        logger.error(f"Error analyzing text: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error analyzing text: {str(e)}"
+        )
+
+@router.post("/analyze/batch", response_model=BatchSentimentResponse, tags=["Analysis"])
+async def analyze_batch(request: BatchTextRequest, predictor=Depends(get_predictor)):
+    """
+    Analyze sentiment of multiple text inputs in a batch.
+    Processes each text and returns combined results.
+    Uses async processing for batches > 10 for improved performance.
+    """
+    if predictor is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    try:
+        start = time.time()
+        results = []
+        if len(request.texts) > 10:
+            async def process_text(text):
+                result = predictor.predict(text)
+                return SentimentResponse(
+                    emotion=result["emotion"],
+                    confidence=result["confidence"],
+                    scores=result["scores"],
+                    processing_time=0
+                )
+            results = await asyncio.gather(*[process_text(text) for text in request.texts])
+        else:
+            for text in request.texts:
+                result = predictor.predict(text)
+                results.append(SentimentResponse(
+                    emotion=result["emotion"],
+                    confidence=result["confidence"],
+                    scores=result["scores"],
+                    processing_time=0
+                ))
+        elapsed = time.time() - start
+        avg_time = elapsed / len(results) if results else 0
+        for r in results:
+            r.processing_time = avg_time
+        logger.info(f"Analyzed batch of {len(request.texts)} texts in {elapsed:.3f}s")
+        return BatchSentimentResponse(
+            results=results,
+            processing_time=elapsed
+        )
+    except Exception as e:
+        logger.error(f"Error analyzing batch: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error analyzing batch: {str(e)}"
+        )
+
+@router.post("/analyze/speech", response_model=SentimentResponse, tags=["Analysis"])
+async def analyze_speech(
+    request: SpeechRequest, 
+    background_tasks: BackgroundTasks,
+    predictor=Depends(get_predictor)
+):
+    """
+    Analyze sentiment from speech input.
+    Converts speech to text and performs sentiment analysis.
+    Note: This endpoint is not yet implemented. Will be available in future updates.
+    """
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED, 
+        detail="Speech analysis not implemented yet. Coming soon!"
+    )
