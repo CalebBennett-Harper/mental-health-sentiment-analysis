@@ -149,4 +149,98 @@ elif page == "Speech Analysis":
 elif page == "History":
     st.header("Emotional History")
     st.info("View your emotional timeline and export your data.")
-    st.write("(Feature coming soon)")
+    import pandas as pd
+    from datetime import datetime
+    import plotly.express as px
+    from collections import Counter
+
+    # Ensure history exists
+    history = st.session_state.get("history", [])
+
+    if not history:
+        st.warning("No analysis history yet. Analyze some text or speech to see your emotional timeline.")
+    else:
+        # Create DataFrame for visualization
+        df = pd.DataFrame(history)
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df = df.sort_values("timestamp")
+        # Expand all emotion scores into columns
+        emotion_keys = set()
+        for r in df["result"]:
+            emotion_keys.update(r["scores"].keys())
+        for key in emotion_keys:
+            df[key] = df["result"].apply(lambda r: r["scores"].get(key, 0.0))
+        df["primary_emotion"] = df["result"].apply(lambda r: r["emotion"])
+        df["confidence"] = df["result"].apply(lambda r: r["confidence"])
+
+        # --- Filtering ---
+        min_date = df["timestamp"].min().date()
+        max_date = df["timestamp"].max().date()
+        date_range = st.date_input(
+            "Select date range",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date
+        )
+        filtered_df = df[(df["timestamp"].dt.date >= date_range[0]) & (df["timestamp"].dt.date <= date_range[1])]
+        emotion_filter = st.multiselect("Filter by emotion", sorted(list(emotion_keys)), default=list(emotion_keys))
+        filtered_df = filtered_df[filtered_df["primary_emotion"].isin(emotion_filter)]
+        input_filter = st.multiselect("Filter by input type", ["text", "speech"], default=["text", "speech"])
+        filtered_df = filtered_df[filtered_df["type"].isin(input_filter)]
+
+        # --- Multi-line chart for all emotions ---
+        st.subheader("Timeline of Emotions (Confidence)")
+        if not filtered_df.empty:
+            fig = px.line(
+                filtered_df,
+                x="timestamp",
+                y=list(emotion_keys),
+                labels={"value": "Confidence", "timestamp": "Time"},
+                title="Emotion Confidence Over Time"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No data to display for selected filters.")
+
+        # --- Pie chart for emotion distribution ---
+        st.subheader("Emotion Distribution")
+        emotion_counts = Counter(filtered_df["primary_emotion"])
+        if emotion_counts:
+            pie_fig = px.pie(
+                names=list(emotion_counts.keys()),
+                values=list(emotion_counts.values()),
+                title="Distribution of Primary Emotions"
+            )
+            st.plotly_chart(pie_fig, use_container_width=True)
+        else:
+            st.info("No data to display for emotion distribution.")
+
+        # --- Summary statistics ---
+        st.subheader("Analysis Insights")
+        if not filtered_df.empty:
+            most_common = filtered_df["primary_emotion"].mode()[0]
+            avg_conf = filtered_df["confidence"].mean()
+            st.markdown(f"- **Most common emotion:** {most_common.capitalize()}")
+            st.markdown(f"- **Average confidence:** {avg_conf:.2%}")
+            # Trend: compare first and last confidence
+            first_row = filtered_df.iloc[0]
+            last_row = filtered_df.iloc[-1]
+            trend = last_row["confidence"] - first_row["confidence"]
+            trend_str = "increasing" if trend > 0 else ("decreasing" if trend < 0 else "stable")
+            st.markdown(f"- **Confidence trend:** {trend_str} ({trend:+.2%})")
+            # Highlight significant change
+            if abs(trend) > 0.2:
+                st.warning(f"Significant change detected: Confidence changed by {trend:+.2%} over the selected period.")
+        else:
+            st.info("No data for insights.")
+
+        # --- Data Table ---
+        st.dataframe(filtered_df[["timestamp", "type", "input", "primary_emotion", "confidence"]], use_container_width=True)
+        # --- Export functionality ---
+        csv = filtered_df.to_csv(index=False)
+        st.download_button(
+            label="Export History as CSV",
+            data=csv,
+            file_name="sentiment_history.csv",
+            mime="text/csv"
+        )
