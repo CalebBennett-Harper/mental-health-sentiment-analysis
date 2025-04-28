@@ -1,0 +1,36 @@
+INFO:     Started server process [32186]
+INFO:     Waiting for application startup.
+/Users/calebharp/mental-health-sentiment-analysis/mental-health-sentiment-analysis/.venv/lib/python3.11/site-packages/transformers/pipelines/text_classification.py:105: UserWarning: `return_all_scores` is now deprecated,  if want a similar functionality use `top_k=None` instead of `return_all_scores=True` or `top_k=1` instead of `return_all_scores=False`.
+  warnings.warn(
+2025-04-28 19:03:17,007 - models.inference - INFO - Model loaded in 1.10 seconds
+2025-04-28 19:03:17,007 - models.inference - INFO - Sentiment predictor initialized on cpu
+2025-04-28 19:03:17,007 - Mental Health Sentiment Analysis API - INFO - Sentiment analysis model loaded successfully
+2025-04-28 19:03:17,007 - api.speech_processing - INFO - Initializing Whisper base model on cpu
+2025-04-28 19:03:17,679 - api.speech_processing - INFO - Whisper model loaded in 0.67s
+2025-04-28 19:03:17,679 - Mental Health Sentiment Analysis API - INFO - Speech processor initialized
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+2025-04-28 19:03:19,601 - models.inference - INFO - Pipeline output for input 'I feel great today!': [{'label': 'POSITIVE', 'score': 0.9998712539672852}]
+2025-04-28 19:03:19,601 - models.inference - INFO - Using result: {'label': 'POSITIVE', 'score': 0.9998712539672852}
+2025-04-28 19:03:19,601 - api.routes - INFO - Analyzed text with length 19 in 0.208s
+INFO:     127.0.0.1:63176 - "POST /api/v1/analyze/text HTTP/1.1" 200 OK
+2025-04-28 19:05:03,374 - models.inference - INFO - Pipeline output for input 'I am feeling cynical and apathetic': [{'label': 'NEGATIVE', 'score': 0.997492790222168}]
+2025-04-28 19:05:03,375 - models.inference - INFO - Using result: {'label': 'NEGATIVE', 'score': 0.997492790222168}
+2025-04-28 19:05:03,375 - api.routes - INFO - Analyzed text with length 34 in 0.134s
+2025-04-28 19:05:03,376 - api.routes - ERROR - Error analyzing text
+Traceback (most recent call last):
+  File "/Users/calebharp/mental-health-sentiment-analysis/mental-health-sentiment-analysis/api/routes.py", line 37, in analyze_text
+    return SentimentResponse(
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/calebharp/mental-health-sentiment-analysis/mental-health-sentiment-analysis/.venv/lib/python3.11/site-packages/pydantic/main.py", line 253, in __init__
+    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pydantic_core._pydantic_core.ValidationError: 1 validation error for SentimentResponse
+confidence
+  Input should be greater than or equal to 0 [type=greater_than_equal, input_value=-0.997492790222168, input_type=float]
+    For further information visit https://errors.pydantic.dev/2.11/v/greater_than_equal
+INFO:     127.0.0.1:63315 - "POST /api/v1/analyze/text HTTP/1.1" 500 Internal Server Error
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [32186]

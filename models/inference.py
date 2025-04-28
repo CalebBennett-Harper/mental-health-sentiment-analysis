@@ -9,7 +9,7 @@ import torch
 import logging
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Union
-from transformers import BertForSequenceClassification, BertTokenizer, pipeline
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, pipeline
 import time
 
 # Configure logging
@@ -18,6 +18,24 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# --- Add mapping from sentiment score to emotion ---
+def map_sentiment_to_emotion(sentiment_score):
+    """Map sentiment score to emotional categories"""
+    if sentiment_score > 0.8:
+        return "happiness", sentiment_score
+    elif sentiment_score > 0.6:
+        return "excitement", sentiment_score
+    elif sentiment_score > 0.2:
+        return "calm", sentiment_score
+    elif sentiment_score > -0.2:
+        return "neutrality", sentiment_score
+    elif sentiment_score > -0.6:
+        return "sadness", sentiment_score
+    elif sentiment_score > -0.8:
+        return "anxiety", sentiment_score
+    else:
+        return "stress", sentiment_score
 
 class SentimentPredictor:
     """Class for efficient sentiment prediction using BERT model."""
@@ -36,32 +54,10 @@ class SentimentPredictor:
         """
         self.model_dir = model_dir
         self.device = device if device else ("cuda" if torch.cuda.is_available() else "cpu")
-        
-        # Load emotion mappings
-        self.load_emotion_mappings()
-        
-        # Load model and tokenizer
+        # Remove emotion mapping loading for now, as we are mapping from sentiment
+        # self.load_emotion_mappings()
         self.load_model_and_tokenizer()
-        
         logger.info(f"Sentiment predictor initialized on {self.device}")
-    
-    def load_emotion_mappings(self):
-        """Load emotion ID to label mappings."""
-        emotion_mapping_path = os.path.join(self.model_dir, "emotion_mapping.json")
-        
-        if os.path.exists(emotion_mapping_path):
-            with open(emotion_mapping_path, 'r') as f:
-                self.id2label = json.load(f)
-                self.label2id = {v: k for k, v in self.id2label.items()}
-            logger.info(f"Loaded emotion mappings: {list(self.id2label.values())}")
-        else:
-            # Default emotions if mapping file not found
-            logger.warning("Emotion mapping file not found. Using default mapping.")
-            self.id2label = {str(i): emotion for i, emotion in enumerate([
-                "stress", "anxiety", "sadness", "happiness", "neutrality", 
-                "frustration", "fear", "excitement", "calm", "overwhelmed"
-            ])}
-            self.label2id = {v: str(i) for i, v in enumerate(self.id2label.values())}
     
     def load_model_and_tokenizer(self):
         """Load the model and tokenizer."""
@@ -69,10 +65,10 @@ class SentimentPredictor:
         
         try:
             # Load tokenizer
-            self.tokenizer = BertTokenizer.from_pretrained(self.model_dir)
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_dir)
             
             # Load model
-            self.model = BertForSequenceClassification.from_pretrained(self.model_dir)
+            self.model = AutoModelForSequenceClassification.from_pretrained(self.model_dir)
             
             # Move model to the appropriate device
             self.model.to(self.device)
@@ -80,12 +76,13 @@ class SentimentPredictor:
             # Set model to evaluation mode
             self.model.eval()
             
-            # Create pipeline for easy inference
+            # Create pipeline for easy inference, explicitly set task and return_all_scores
             self.pipeline = pipeline(
-                "text-classification",
+                task="sentiment-analysis",
                 model=self.model,
                 tokenizer=self.tokenizer,
-                device=0 if self.device == "cuda" else -1
+                device=0 if self.device == "cuda" else -1,
+                return_all_scores=False
             )
             
             logger.info(f"Model loaded in {time.time() - start_time:.2f} seconds")
@@ -96,87 +93,56 @@ class SentimentPredictor:
     
     def predict(self, text: str) -> Dict:
         """
-        Predict sentiment from input text.
-        
-        Args:
-            text: Input text to analyze
-            
-        Returns:
-            Dictionary with emotion, confidence, and all emotion scores
+        Predict sentiment from input text and map it to emotion.
         """
         start_time = time.time()
-        
-        # Format input with instruction
-        input_text = f"Analyze the emotional content of this text: {text}"
-        
-        # Tokenize input
-        inputs = self.tokenizer(
-            input_text, 
-            return_tensors="pt", 
-            padding=True, 
-            truncation=True, 
-            max_length=128
-        ).to(self.device)
-        
-        # Run inference
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-        
-        # Process logits
-        logits = outputs.logits[0].cpu().numpy()
-        probabilities = torch.nn.functional.softmax(torch.tensor(logits), dim=0).numpy()
-        
-        # Get prediction and confidence
-        prediction_id = np.argmax(probabilities)
-        emotion = self.id2label[str(prediction_id)]
-        confidence = float(probabilities[prediction_id])
-        
-        # Create scores dictionary
-        scores = {self.id2label[str(i)]: float(prob) for i, prob in enumerate(probabilities)}
-        
-        # Calculate processing time
-        processing_time = time.time() - start_time
-        
-        return {
-            "emotion": emotion,
-            "confidence": confidence,
-            "scores": scores,
-            "processing_time": processing_time
-        }
-    
-    def predict_pipeline(self, text: str) -> Dict:
-        """
-        Predict sentiment using the pipeline (simpler but slightly less flexible).
-        
-        Args:
-            text: Input text to analyze
-            
-        Returns:
-            Dictionary with emotion, confidence, and scores
-        """
-        start_time = time.time()
-        
-        # Format input with instruction
-        input_text = f"Analyze the emotional content of this text: {text}"
-        
-        # Get prediction
-        result = self.pipeline(input_text)[0]
-        label = result['label']
-        score = result['score']
-        
-        # Map back to emotion
-        emotion_id = int(label.split('_')[-1]) if '_' in label else int(label)
-        emotion = self.id2label[str(emotion_id)]
-        
-        # Calculate processing time
-        processing_time = time.time() - start_time
-        
-        # Create a simplified response with just the top emotion
-        return {
-            "emotion": emotion,
-            "confidence": float(score),
-            "processing_time": processing_time
-        }
+        input_text = text
+        try:
+            # Use pipeline for sentiment with more explicit error handling
+            pipeline_result = self.pipeline(input_text)
+            logger.info(f"Pipeline output for input '{input_text}': {pipeline_result}")
+            # Check for empty or malformed results
+            if not pipeline_result:
+                logger.warning(f"Empty pipeline result for '{input_text}', using fallback")
+                return {
+                    "emotion": "neutrality",
+                    "confidence": 0.5,
+                    "scores": {"neutrality": 0.5},
+                    "processing_time": time.time() - start_time
+                }
+            try:
+                result = pipeline_result[0] if isinstance(pipeline_result, list) else pipeline_result
+                logger.info(f"Using result: {result}")
+                label = result.get('label', 'NEUTRAL')
+                score = result.get('score', 0.5)
+                sentiment_score = score if label == 'POSITIVE' else -score
+                # Map sentiment to emotion and ensure non-negative confidence
+                emotion, raw_confidence = map_sentiment_to_emotion(sentiment_score)
+                confidence = abs(raw_confidence)
+                processing_time = time.time() - start_time
+                return {
+                    "emotion": emotion,
+                    "confidence": confidence,
+                    "scores": {emotion: confidence},
+                    "processing_time": processing_time
+                }
+            except (IndexError, KeyError, AttributeError) as e:
+                logger.error(f"Error processing pipeline result: {e}")
+                logger.error(f"Raw result was: {pipeline_result}")
+                return {
+                    "emotion": "neutrality",
+                    "confidence": 0.5,
+                    "scores": {"neutrality": 0.5},
+                    "processing_time": time.time() - start_time
+                }
+        except Exception as e:
+            logger.error(f"Pipeline execution error: {str(e)}")
+            return {
+                "emotion": "neutrality",
+                "confidence": 0.5,
+                "scores": {"neutrality": 0.5},
+                "processing_time": time.time() - start_time
+            }
     
     def batch_predict(self, texts: List[str]) -> List[Dict]:
         """
@@ -227,7 +193,7 @@ class SentimentPredictor:
             
         explanation = f"This text expresses {certainty} {primary_emotion}. "
         
-        if top_emotions[0][1] - top_emotions[1][1] < 0.2:
+        if len(top_emotions) > 1 and top_emotions[0][1] - top_emotions[1][1] < 0.2:
             # If top emotions are close, mention the secondary emotion
             explanation += f"There are also elements of {top_emotions[1][0]} present. "
         

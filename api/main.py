@@ -14,7 +14,7 @@ class Settings:
     PROJECT_NAME: str = "Mental Health Sentiment Analysis API"
     VERSION: str = "0.1.0"
     DEBUG: bool = True
-    MODEL_DIR: str = "models/fine-tuned"
+    MODEL_DIR: str = "distilbert-base-uncased-finetuned-sst-2-english"  # Pre-trained sentiment model
     MAX_BATCH_SIZE: int = 10
     ENABLE_SPEECH: bool = True
 

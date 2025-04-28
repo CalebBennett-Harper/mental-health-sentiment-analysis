@@ -23,9 +23,13 @@ async def analyze_text(request: TextRequest, predictor=Depends(get_predictor)):
         raise HTTPException(status_code=503, detail="Model not loaded")
     try:
         start = time.time()
-        # Check if explanation is available
+        # Attempt explanation, fall back to basic predict on error
         if hasattr(predictor, "analyze_text_with_explanation"):
-            result = predictor.analyze_text_with_explanation(request.text)
+            try:
+                result = predictor.analyze_text_with_explanation(request.text)
+            except Exception as ex:
+                logger.error("Explanation error, using basic predict", exc_info=True)
+                result = predictor.predict(request.text)
         else:
             result = predictor.predict(request.text)
         elapsed = time.time() - start
@@ -38,7 +42,7 @@ async def analyze_text(request: TextRequest, predictor=Depends(get_predictor)):
             explanation=result.get("explanation")
         )
     except Exception as e:
-        logger.error(f"Error analyzing text: {str(e)}")
+        logger.exception("Error analyzing text", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error analyzing text: {str(e)}"
@@ -114,7 +118,11 @@ async def analyze_speech(
                 detail="Could not transcribe audio. Please check the audio file."
             )
         if hasattr(predictor, "analyze_text_with_explanation"):
-            result = predictor.analyze_text_with_explanation(transcribed_text)
+            try:
+                result = predictor.analyze_text_with_explanation(transcribed_text)
+            except Exception as ex:
+                logger.error("Explanation error, using basic predict", exc_info=True)
+                result = predictor.predict(transcribed_text)
         else:
             result = predictor.predict(transcribed_text)
         elapsed = time.time() - start_time
