@@ -30,15 +30,14 @@ def set_api_url():
 set_api_url()
 page = st.sidebar.radio(
     "Navigation",
-    ["Text Analysis", "Speech Analysis", "History"],
-    icons=["✍️", "🎤", "📈"]
+    ["✍️ Text Analysis", "🎤 Speech Analysis", "📈 History"]
 )
 
 st.title("🧠 Mental Health Sentiment Analysis")
 st.write("Analyze your emotions from text or speech in real time.")
 
 # --- Page Routing ---
-if page == "Text Analysis":
+if page == "✍️ Text Analysis":
     st.header("Text Emotion Analysis")
     st.info("Enter your thoughts and get instant emotional feedback.")
 
@@ -82,7 +81,7 @@ if page == "Text Analysis":
                     st.error(f"Error connecting to API: {str(e)}")
         else:
             st.warning("Please enter some text to analyze.")
-elif page == "Speech Analysis":
+elif page == "🎤 Speech Analysis":
     st.header("Speech Emotion Analysis")
     st.info("Record or upload audio to analyze your emotions.")
 
@@ -146,7 +145,7 @@ elif page == "Speech Analysis":
                     st.error(f"Error connecting to API: {str(e)}")
         else:
             st.warning("Please upload or record audio to analyze.")
-elif page == "History":
+elif page == "📈 History":
     st.header("Emotional History")
     st.info("View your emotional timeline and export your data.")
     import pandas as pd
