@@ -5,6 +5,9 @@ Provides UI for text and speech emotion analysis and history tracking.
 
 import streamlit as st
 import requests
+import pandas as pd
+from datetime import datetime
+from collections import Counter
 
 # --- App Configuration ---
 st.set_page_config(
@@ -47,7 +50,6 @@ if page == "✍️ Text Analysis":
     # Process button
     if st.button("Analyze Emotions"):
         if user_text:
-            from datetime import datetime
             with st.spinner("Analyzing your text..."):
                 try:
                     response = requests.post(
@@ -100,7 +102,6 @@ elif page == "🎤 Speech Analysis":
     # Process button
     if st.button("Analyze Speech"):
         if audio_file or audio_bytes:
-            from datetime import datetime
             with st.spinner("Transcribing and analyzing your speech..."):
                 try:
                     files = None
@@ -144,10 +145,6 @@ elif page == "🎤 Speech Analysis":
 elif page == "📈 History":
     st.header("Emotional History")
     st.info("View your emotional timeline and export your data.")
-    import pandas as pd
-    from datetime import datetime
-    import plotly.express as px
-    from collections import Counter
 
     # Ensure history exists
     history = st.session_state.get("history", [])
@@ -186,27 +183,19 @@ elif page == "📈 History":
         # --- Multi-line chart for all emotions ---
         st.subheader("Timeline of Emotions (Confidence)")
         if not filtered_df.empty:
-            fig = px.line(
-                filtered_df,
-                x="timestamp",
-                y=list(emotion_keys),
-                labels={"value": "Confidence", "timestamp": "Time"},
-                title="Emotion Confidence Over Time"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            st.line_chart(filtered_df.set_index("timestamp")[list(emotion_keys)], use_container_width=True)
         else:
             st.info("No data to display for selected filters.")
 
-        # --- Pie chart for emotion distribution ---
+        # --- Bar chart for emotion distribution (instead of pie chart) ---
         st.subheader("Emotion Distribution")
         emotion_counts = Counter(filtered_df["primary_emotion"])
         if emotion_counts:
-            pie_fig = px.pie(
-                names=list(emotion_counts.keys()),
-                values=list(emotion_counts.values()),
-                title="Distribution of Primary Emotions"
-            )
-            st.plotly_chart(pie_fig, use_container_width=True)
+            emotions_df = pd.DataFrame({
+                "emotion": list(emotion_counts.keys()),
+                "count": list(emotion_counts.values())
+            })
+            st.bar_chart(emotions_df.set_index("emotion"), use_container_width=True)
         else:
             st.info("No data to display for emotion distribution.")
 
