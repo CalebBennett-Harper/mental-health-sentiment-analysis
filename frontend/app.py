@@ -92,14 +92,10 @@ elif page == "🎤 Speech Analysis":
         accept_multiple_files=False
     )
 
-    # (Optional) In-browser audio recording (Streamlit doesn't natively support, but st_audiorec is a community component)
-    try:
-        import st_audiorec
-        st.write("Or record audio directly:")
-        audio_bytes = st_audiorec.st_audiorec()
-    except ImportError:
-        audio_bytes = None
-        st.caption("Install st-audiorec for in-browser recording: pip install st-audiorec")
+    # Remove st-audiorec and provide fallback message
+    st.write("Note: Audio recording directly in the browser is not available.")
+    st.write("Please upload an audio file instead.")
+    audio_bytes = None
 
     # Process button
     if st.button("Analyze Speech"):
