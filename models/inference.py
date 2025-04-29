@@ -37,6 +37,27 @@ def map_sentiment_to_emotion(sentiment_score):
     else:
         return "stress", sentiment_score
 
+# Compute a distribution across emotions for more nuanced confidence
+def compute_emotion_distribution(sentiment_score: float, sigma: float = 0.25) -> Dict[str, float]:
+    """
+    Compute a Gaussian-based distribution over emotions.
+    """
+    emotion_points = {
+        "happiness": 1.0,
+        "excitement": 0.8,
+        "calm": 0.4,
+        "neutrality": 0.0,
+        "sadness": -0.4,
+        "anxiety": -0.7,
+        "stress": -1.0,
+    }
+    weights = {
+        emo: np.exp(-0.5 * ((sentiment_score - point) / sigma) ** 2)
+        for emo, point in emotion_points.items()
+    }
+    total = sum(weights.values())
+    return {emo: float(weight / total) for emo, weight in weights.items()}
+
 class SentimentPredictor:
     """Class for efficient sentiment prediction using BERT model."""
     
@@ -116,14 +137,16 @@ class SentimentPredictor:
                 label = result.get('label', 'NEUTRAL')
                 score = result.get('score', 0.5)
                 sentiment_score = score if label == 'POSITIVE' else -score
-                # Map sentiment to emotion and ensure non-negative confidence
-                emotion, raw_confidence = map_sentiment_to_emotion(sentiment_score)
-                confidence = abs(raw_confidence)
+                # Compute nuanced distribution across emotions
+                scores = compute_emotion_distribution(sentiment_score)
+                primary_emotion = max(scores, key=scores.get)
+                confidence = scores[primary_emotion]
                 processing_time = time.time() - start_time
+                
                 return {
-                    "emotion": emotion,
+                    "emotion": primary_emotion,
                     "confidence": confidence,
-                    "scores": {emotion: confidence},
+                    "scores": scores,
                     "processing_time": processing_time
                 }
             except (IndexError, KeyError, AttributeError) as e:
